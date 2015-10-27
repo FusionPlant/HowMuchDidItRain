@@ -7,20 +7,14 @@ import numpy.linalg as linalg
 
 in_file = open('train_norm.csv')
 
-# init w
-FEA_LEN = 21 + 1
-w = [0] * FEA_LEN
-for i in range(FEA_LEN):
-    w[i] = random.random()
-
-#print w
-
 # prepre for gradient descent
 # a1 = X' * X
 # a2 = X' * y
-in_file.seek(0)
-sample_num = 0
+data = in_file.readline().split(',')
+FEA_LEN = len(data) - 1
+y_idx = len(data) - 1
 
+in_file.seek(0)
 mpath = 'gd.json'
 if not os.path.isfile(mpath):
     a1 = [[0] * FEA_LEN for i in range(FEA_LEN)]
@@ -33,15 +27,15 @@ if not os.path.isfile(mpath):
         for i in range(FEA_LEN):
             for j in range(i, FEA_LEN):
                 a1[i][j] += data[i] * data[j]
-            a2[i] += data[i] * data[22]
+            a2[i] += data[i] * data[y_idx]
         #if line_num == 100000:
         #    print a2
         #    sys.exit()
 
     # a1 is symmetric
     for i in range(FEA_LEN):
-        for j in range(i, FEA_LEN):
-            a1[j][i] = a1[i][j];
+        for j in range(i-1):
+            a1[i][j] = a1[j][i];
 
     mfile = open(mpath, 'w')
     json.dump([a1, a2], mfile)
@@ -53,14 +47,13 @@ else:
 #print a2
 #sys.exit()
 
-eta = 0.01
-lam = 100
-for i in range(FEA_LEN):
-    a1[i][i] += lam
+#lam = 100
+#for i in range(FEA_LEN):
+#    a1[i][i] += lam
 
 a1_inv = linalg.pinv(np.matrix(a1))
 
-w = a1 * np.matrix.transpose(np.matrix(a2))
+w = a1_inv * np.matrix.transpose(np.matrix(a2))
 w = np.array(w).reshape(-1,).tolist()
 
 print "w:"
@@ -78,10 +71,10 @@ for line_num, line in enumerate(in_file):
     pre = w[0]
     for i in range(1, FEA_LEN):
         pre += w[i] * data[i]
-    err += abs(pre - data[22]) 
-    if line_num == 100:
-        print float(err / cnt)
-        break
+    err += abs(pre - data[y_idx]) 
+    #if line_num == 100:
+    #    print float(err / cnt)
+    #    break
 
 print("NAE: {0}".format(float(err) / cnt))
 
