@@ -13,23 +13,27 @@ writer = csv.writer(out_file)
 writer.writerow(['Id', 'Expected'])
 
 for row in reader:
+    row = [float(z) for z in row]
+    row[0] = int(row[0])
     if row[3] > 0:
         expected = row[3]
     else:
-        # Ref
-        for i in [6, 5, 4]:
-            if row[i] > 0:
-                expected = row[i]
-                break
+        expected = 0.75
+        ## Ref
+        #for i in [6, 5, 4]:
+        #    if row[i] > 0:
+        #        expected = row[i]
+        #        break
 
-        if row[i] > 0:
-            continue
+        #if row[i] == 0:
+        #    # RefComposite
+        #    for i in [7, 10, 9, 8]:
+        #        if row[i] > 0:
+        #            expected = row[i]
+        #            break
 
-        # RefComposite
-        for i in [7, 10, 9, 8]:
-            if row[i] > 0:
-                expected = row[i]
-                break
+        #if int(expected) == 0:
+        #    expected = 0.75
 
     rs = [row[0], expected]
     writer.writerow(rs)
