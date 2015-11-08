@@ -5,9 +5,6 @@ in_file = open('data/train.csv')
 out_file = open('train_merge.csv', 'w')
 
 #in_file = open('data/test.csv')
-#out_file = open('data/dask_solution.csv', 'w')
-
-#in_file = open('data/test.csv')
 ##in_file = open('train.sample.csv')
 #out_file = open('test_merge.csv', 'w')
 
@@ -56,32 +53,32 @@ for line_num, line in enumerate(in_file):
         if id is not None:
             # clear old
             out_line = [id, dis, len(ob_list)]
-            if len(ob_list) > 0:
-                # minutes
-                mins = []
+            # minutes
+            mins = []
+            for i in range(len(ob_list)):
+                mins.append(int(ob_list[i][1]))
+
+            # refs
+            ref_num = 8
+            start_idx = 3
+            for ref_idx in range(ref_num):
+                ref = []
                 for i in range(len(ob_list)):
-                    mins.append(int(ob_list[i][1]))
+                    if ob_list[i][ref_idx + start_idx] != '':
+                        ref.append(float(ob_list[i][ref_idx + start_idx]))
+                    else:
+                        ref.append(None)
+                out_line.append(transfer_ref(ref, mins))
 
-                # refs
-                ref_num = 8
-                for ref_idx in range(ref_num):
-                    ref = []
-                    for i in range(len(ob_list)):
-                        if ob_list[i][ref_idx + 3] != '':
-                            ref.append(float(ob_list[i][ref_idx + 3]))
-                        else:
-                            ref.append(None)
-                    out_line.append(transfer_ref(ref, mins))
-            else:
-                # empty data
-                for i in range(num):
+            # other features
+            # use average
+            for i in range(8, 20):
+                if cnt[i] == 0:
                     out_line.append(0)
+                else:
+                    out_line.append(su[i] / float(cnt[i]))
 
-            #for i in range(num):
-            #    if cnt[i] == 0:
-            #        out_line.append('')
-            #    else:
-            #        out_line.append(str(su[i] / float(cnt[i])))
+            # expected 
             if not is_test:
                 out_line.append(expected)
 
@@ -94,22 +91,24 @@ for line_num, line in enumerate(in_file):
         # start new
         id = data[0]
         dis = data[2]
-        #cnt = [0] * num
+        cnt = [0] * num
+        su = [0] * num
         ob_list = []
         if not is_test:
             expected = data[23]
 
-    #for i in range(3, 3 + num):
-    #    if data[i].strip() != '':
-    #        j = i - 3
-    #        cnt[j] += 1
-    #        #su[j] += float(data[i])
-    #    else:
-    #        emp_cnt += 1
-    emp_cnt = 0
     for i in range(3, 3 + num):
-        if data[i].strip() == '':
-            emp_cnt += 1
+        if data[i].strip() != '':
+            j = i - 3
+            cnt[j] += 1
+            su[j] += float(data[i])
+        else:
+            pass
+            #emp_cnt += 1
+    #emp_cnt = 0
+    #for i in range(3, 3 + num):
+    #    if data[i].strip() == '':
+    #        emp_cnt += 1
 
     ob_list.append(data)
     #if emp_cnt != num:
@@ -117,35 +116,39 @@ for line_num, line in enumerate(in_file):
 
 #for i in range(len(ob_list)):
 #    print ob_list[i]
+
+# for last set
 # clear old
 out_line = [id, dis, len(ob_list)]
+# minutes
+mins = []
+for i in range(len(ob_list)):
+    mins.append(int(ob_list[i][1]))
+
+# refs
 ref_num = 8
-if len(ob_list) > 0:
-    # minutes
-    mins = []
+start_idx = 3
+for ref_idx in range(ref_num):
+    ref = []
     for i in range(len(ob_list)):
-        mins.append(int(ob_list[i][1]))
+        if ob_list[i][ref_idx + start_idx] != '':
+            ref.append(float(ob_list[i][ref_idx + start_idx]))
+        else:
+            ref.append(None)
+    out_line.append(transfer_ref(ref, mins))
 
-    # refs
-    for ref_idx in range(ref_num):
-        ref = []
-        for i in range(len(ob_list)):
-            if ob_list[i][ref_idx + 3] != '':
-                ref.append(float(ob_list[i][ref_idx + 3]))
-            else:
-                ref.append(None)
-        out_line.append(transfer_ref(ref, mins))
-else:
-    # empty data
-    for i in range(ref_num):
+# other features
+# use average
+for i in range(8, 20):
+    if cnt[i] == 0:
         out_line.append(0)
+    else:
+        out_line.append(su[i] / float(cnt[i]))
 
+# expected 
 if not is_test:
     out_line.append(expected)
 
-#out_file.write(",".join([str(z) for z in out_line]))
-#out_file.write('\n')
-#out_line = [out_line[0], out_line[3]]
 out_file.write(",".join([str(z) for z in out_line]))
 out_file.write('\n')
 
