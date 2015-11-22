@@ -243,7 +243,7 @@ type_count = len(type_list)
 time_min_col = 1
 dist_col = 2
 reflectivity_col = range(3, 11)
-to_average_col = range(11, 23)
+to_average_col = range(3, 23)
 # range(3, 23): include reflectivity in addition to precipitation calculated with it
 # range(11, 23): does not include reflectivity again
 to_count_data_col = range(3, 23)
