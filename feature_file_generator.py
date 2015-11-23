@@ -139,8 +139,8 @@ def id_block_process(id_block):
     line_count = len(id_block)
     features = list()
 
-    # # Add id as feature
-    # features.append(id_block[0][id_col])
+    # Add id as feature
+    features.append(id_block[0][id_col])
 
     # Add number of columns as feature
     features.append(line_count)
@@ -239,7 +239,7 @@ type_list = [[[5, 50], [0.97, 1.01], [0, 6], [0, 1]],
 gaussian_list = [[[f_mean(type_list[ii][jj]), f_std(type_list[ii][jj])] for jj in range(4)] for ii in range(8)]
 type_count = len(type_list)
 
-# id_col = 0
+id_col = 0
 time_min_col = 1
 dist_col = 2
 reflectivity_col = range(3, 11)
@@ -268,8 +268,8 @@ else:
     zdr_col = list()
     kdp_col = list()
 
-in_data_file = open('data/train.csv')
-out_data_file = open('features.csv', 'w')
+in_data_file = open('data/test.csv')  # data/test.csv or data/train.csv
+out_data_file = open('features_test.csv', 'w')  # features.csv or features_test.csv
 max_precipitation = 70.0
 missing_label = -999.0  # used to be 0.0
 drop_empty_block = True
