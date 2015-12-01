@@ -1,4 +1,5 @@
 import math
+import time
 
 
 # Output an float list from input string, with None indicating missing data
@@ -79,7 +80,6 @@ def predict_with_reflectivity(reflectivity, time_interval_min):
 
 # average data from value array
 def average_values(value_all, time_interval_min):
-    averaged_value = 0.0
     for value in value_all:
         if value is not None:
             valid_value = value  # first not None value
@@ -87,11 +87,20 @@ def average_values(value_all, time_interval_min):
     else:
         return missing_label
 
-    for value, minute in zip(value_all, time_interval_min):
-        if value is not None:
-            valid_value = value
-        averaged_value += valid_value * minute
-    return averaged_value / 60.0
+    averaged_value = 0.0
+    if is_time_average:
+        for value, minute in zip(value_all, time_interval_min):
+            if value is not None:
+                valid_value = value
+            averaged_value += valid_value * minute
+        return averaged_value / 60.0
+    else:
+        value_count = 0
+        for value in value_all:
+            if value is not None:
+                averaged_value += value
+                value_count += 1
+        return averaged_value / value_count
 
 
 # determine if the values in list x is in the range specified in list y
@@ -192,7 +201,7 @@ def id_block_process(id_block):
                           precipitation_types_likelihood_cal(id_block[i][ref_col[j]], id_block[i][rho_hv_col[j]],
                                                              id_block[i][zdr_col[j]], id_block[i][kdp_col[j]]))
         type_likelihood = [type_likelihood[i]/line_count for i in range(type_count)]
-        if remove_last_type:
+        if is_remove_last_type:
             features.extend(type_likelihood[:-1])
         else:
             features.extend(type_likelihood)
@@ -247,12 +256,28 @@ to_average_col = range(3, 23)
 # range(3, 23): include reflectivity in addition to precipitation calculated with it
 # range(11, 23): does not include reflectivity again
 to_count_data_col = range(3, 23)
-add_precipitation_type = True
-simple_precipitation_type = True
-remove_last_type = False  # Make sure columns are linearly independent
+max_precipitation = 70.0
+missing_label = -999.0
+drop_empty_block = True
+is_time_average = False  # Use simple average or time average
+is_add_precipitation_type = True
+is_simple_precipitation_type = True
+is_remove_last_type = True  # Make sure columns are linearly independent
+is_test = True  # Generating test features or training features
 
-if add_precipitation_type:
-    if simple_precipitation_type:
+if is_test:
+    in_data_file = open('data/test.csv')
+    out_data_file = open('features_test.csv', 'w')
+    drop_empty_block = False
+else:
+    in_data_file = open('data/train.csv')
+    out_data_file = open('features.csv', 'w')
+
+# Remove the header
+in_data_file.readline()
+
+if is_add_precipitation_type:
+    if is_simple_precipitation_type:
         ref_col = [3]
         rho_hv_col = [11]
         zdr_col = [15]
@@ -268,17 +293,10 @@ else:
     zdr_col = list()
     kdp_col = list()
 
-in_data_file = open('data/test.csv')  # data/test.csv or data/train.csv
-out_data_file = open('features_test.csv', 'w')  # features.csv or features_test.csv
-max_precipitation = 70.0
-missing_label = -999.0  # used to be 0.0
-drop_empty_block = True
-
-# Remove the header
-in_data_file.readline()
-
+t0 = time.clock()
 dropped_line = file_reader(in_data_file, out_data_file)
-print "Feature generation completed. {:d} observations dropped.".format(dropped_line)
+print("Feature generation completed in {:f} minutes. {:d} observations dropped."
+      .format((time.clock()-t0)/60.0, dropped_line))
 
 in_data_file.close()
 out_data_file.close()
