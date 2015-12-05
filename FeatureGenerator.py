@@ -1,5 +1,8 @@
 import math
 import time
+import numpy as np
+import pickle
+from sklearn.utils import shuffle
 
 
 # Output an float list from input string, with None indicating missing data
@@ -134,9 +137,9 @@ def precipitation_types_likelihood_cal(ref, rho_hv, zdr, kdp):
     return likelihoods
 
 
-def list_addition(x, y):
-    for i in range(len(x)):
-        x[i] += y[i]
+def list_addition(x_list, y_list):
+    for i in range(len(x_list)):
+        x_list[i] += y_list[i]
 
 
 # for each data block from a same id, process it and return one line of data in list form
@@ -213,17 +216,12 @@ def id_block_process(id_block):
     return features
 
 
-def file_reader(input_file, output_file):
-    id_block_all = by_id_reader(input_file)
+def file_reader(input_file, output_list):
     dropped_line_count = 0
-    for block_num, id_block in enumerate(id_block_all):
-        # if block_num % 5000 == 0:
-        #     print "Writing output line {:d}".format(block_num)
-
+    for id_block in by_id_reader(input_file):
         id_features = id_block_process(id_block)
         if id_features is not None:
-            out_str = ",".join([str(item) for item in id_features])
-            output_file.write(out_str+'\n')
+            output_list.append(id_features)
         else:
             dropped_line_count += 1
     return dropped_line_count
@@ -237,6 +235,15 @@ def f_std(x):
     return (x[1]-x[0])/2.0
 
 
+def zero_fill(data, label):
+    fill_count = 0
+    for i in range(len(data)):
+        if data[i] == label:
+            data[i] = 0.0
+            fill_count += 1
+    return fill_count
+
+
 type_list = [[[5, 50], [0.97, 1.01], [0, 6], [0, 1]],
              [[40, 60], [0.95, 1], [0.5, 8], [1, 5]],
              [[10, 50], [0.92, 1.01], [2.5, 7], [0, 2]],
@@ -248,6 +255,8 @@ type_list = [[[5, 50], [0.97, 1.01], [0, 6], [0, 1]],
 gaussian_list = [[[f_mean(type_list[ii][jj]), f_std(type_list[ii][jj])] for jj in range(4)] for ii in range(8)]
 type_count = len(type_list)
 
+####################################################################################################
+# parameters
 id_col = 0
 time_min_col = 1
 dist_col = 2
@@ -261,19 +270,20 @@ missing_label = -999.0
 drop_empty_block = True
 is_time_average = False  # Use simple average or time average
 is_add_precipitation_type = True
-is_simple_precipitation_type = True
-is_remove_last_type = True  # Make sure columns are linearly independent
-is_test = True  # Generating test features or training features
+is_simple_precipitation_type = False
+is_remove_last_type = False  # Make sure columns are linearly independent
+is_test = False  # Generating test features or training features
+random_seeds = [1, 13]
+####################################################################################################
+
+# To do: remove dist, add all averages
+# fill empty field but not for completely empty observations
 
 if is_test:
     in_data_file = open('data/test.csv')
-    out_data_file = open('features_test.csv', 'w')
     drop_empty_block = False
 else:
     in_data_file = open('data/train.csv')
-    out_data_file = open('features.csv', 'w')
-
-# Remove the header
 in_data_file.readline()
 
 if is_add_precipitation_type:
@@ -294,9 +304,52 @@ else:
     kdp_col = list()
 
 t0 = time.clock()
-dropped_line = file_reader(in_data_file, out_data_file)
-print("Feature generation completed in {:f} minutes. {:d} observations dropped."
+data_list = list()
+dropped_line = file_reader(in_data_file, data_list)
+print("Feature generation completed in {:.0f} minutes. {:d} observations dropped."
       .format((time.clock()-t0)/60.0, dropped_line))
-
 in_data_file.close()
-out_data_file.close()
+
+###############################################################################
+# data_list Columns:
+# 0 id
+# 1 observation line count
+# 2 valid data count
+# 3 valid data percentage
+# 4 distance
+# 5-12 reflectivity->precipitation, 5 is the baseline
+# 13-32 all radar data including reflectivity, time averaged
+# 33-60/64(depends on whether or not remove the last precipitation type)
+# precipitation type likelihoods
+# last column(61/65): expected
+
+if is_test:
+    t0 = time.clock()
+    data_test = np.array(data_list)
+    file_handle = open('data/testing_data', 'w')
+    pickle.dump([data_test], file_handle)
+    file_handle.close()
+    print("Testing data files generated in {.0f} seconds.".format(time.clock()-t0))
+else:
+    t0 = time.clock()
+    data_train = np.array(data_list)
+    X0 = data_train[:, 1:-1]
+    y0 = data_train[:, -1]
+    y_base0 = data_train[:, 5]
+    zero_fill_count = zero_fill(y_base0, missing_label)
+    print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
+
+    for random_seed in random_seeds:
+        X, y, y_base = shuffle(X0, y0, y_base0, random_state=random_seed)
+        offset = np.floor(X.shape[0] * 0.8)
+        X_train, y_train = X[:offset], y[:offset]
+        X_test, y_test, y_base_test, y_base0_test = X[offset:], y[offset:], y_base[offset:], y_base0[offset:]
+
+        file_handle = open('data/training_data_4cv' + str(random_seed), 'w')
+        pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base0_test], file_handle)
+        file_handle.close()
+        file_handle = open('data/training_data_4test' + str(random_seed), 'w')
+        pickle.dump([X, y], file_handle)
+        file_handle.close()
+
+    print("Training data files generated in {:.0f} seconds.".format(time.clock()-t0))

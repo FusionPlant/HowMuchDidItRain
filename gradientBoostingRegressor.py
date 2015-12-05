@@ -1,30 +1,11 @@
-
 import numpy as np
 import time
 from sklearn import ensemble
-from sklearn.utils import shuffle
+import pickle
 # import sys
 # from sklearn import datasets
 # from sklearn.metrics import mean_squared_error
 # import matplotlib.pyplot as plt
-
-
-def precipitation_round(x):
-    if x <= 70:
-        return np.floor(x/2)*2+1
-    else:
-        return np.floor((x-70)/100)*100+570
-
-
-def categorize(precipitation):
-    categories = list()
-    for i in range(len(precipitation)):
-        precipitation[i] = precipitation_round(precipitation[i])
-        if categories.count(precipitation[i]) == 0:
-            categories.append(precipitation[i])
-    for i in range(len(precipitation)):
-        precipitation[i] = categories.index(precipitation[i])
-    return categories
 
 
 def zero_fill(data, label):
@@ -36,18 +17,10 @@ def zero_fill(data, label):
     return fill_count
 
 
-# prediction is numpy.ndarray
-def encode_category(prediction, categories):
-    result = [0]*len(prediction)
-    for i in range(len(prediction)):
-        result[i] = categories[prediction[i].argmax()]
-    return result
-
-
 # set zero values for empty observation in test
 def test_zero_fill(data, prediction, label, zero_value):
     fill_count = 0
-    empty_range = range(4, 32)  # id already removed, so from 4th column, 28 columns in total
+    empty_range = zero_fill_range
     for i in range(len(data)):
         for j in empty_range:
             if data[i, j] != label:
@@ -67,6 +40,22 @@ def predict_zero_negative(data):
             fill_count += 1
     return fill_count
 
+
+# output prediction results
+def print_prediction(baseline_prediction):
+    mae = abs(y_test - y_predict_gbr).mean()
+    mae_base = abs(y_test - baseline_prediction).mean()
+    print("GBR MAE = {:.4f}, baseline MAE = {:.4f}.".format(mae, mae_base))
+
+    mae_mix = list()
+    for ii in range(9):
+        ratio = ii*0.1+0.1
+        mae_mix.append(abs(ratio*baseline_prediction + (1.0-ratio)*y_predict_gbr - y_test).mean())
+    print("Mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
+          .format(*mae_mix))
+    print("{:d} out of {:d} GBR predictions is greater than baseline prediction."
+          .format(np.sum(np.greater(y_predict_gbr, baseline_prediction)), len(y_predict_gbr)))
+
 ###############################################################################
 
 # Column Meaning:
@@ -81,67 +70,56 @@ def predict_zero_negative(data):
 # precipitation type likelihoods
 # last column(40/41): expected
 
-# Load data
-t0 = time.clock()
-data_train = np.loadtxt('features.csv', dtype='float32', delimiter=',')
-sample_count, feature_count = data_train.shape
-print("Finished fetching data with {:g} samples in {:.0f} seconds.".format(sample_count, time.clock()-t0))
-
 # define all parameters
-is_quiet = False
 is_test = False
-empty_prediction_value = 0.75
-random_seed = 1
+empty_prediction_value = 0.762
+random_seed = 13
 missing_label = -999.0
-gbr_param = {'n_estimators': 600, 'max_depth': 6, 'min_samples_split': 100,
+gbr_param = {'n_estimators': 1000, 'max_depth': 6, 'min_samples_split': 100,
              'learning_rate': 0.1, 'loss': 'lad', 'max_features': 10}
-# gbr_param = {'n_estimators': 400, 'max_depth': 6, 'min_samples_split': 1,
-#              'learning_rate': 0.1, 'loss': 'lad', 'max_features': 5}
+zero_fill_range = range(4, 32)  # id already removed, so from 4th column, 28 columns in total
 
 # preprocessing data
-X = data_train[:, 1:-1]
-y = data_train[:, -1]
-y_test = list()
-data_test = list()
-mae_base = 0
+y_test = np.array([])
+data_test = np.array([])
+y_base_test = np.array([])
+y_base0_test = np.array([])
 if is_test:
-    X_train, y_train = X, y
     t0 = time.clock()
-    data_test = np.loadtxt('features_test.csv', dtype='float32', delimiter=',')
+    file_handle = open('data/training_data_4test' + str(random_seed), 'r')
+    X_train, y_train = pickle.load(file_handle)
+    file_handle.close()
+    file_handle = open('data/testing_data', 'r')
+    data_test = pickle.load(file_handle)
+    file_handle.close()
     X_test = data_test[:, 1:]
-    print("Finished fetching test data with {:g} samples in {:.0f} seconds.".format(len(data_test), time.clock()-t0))
+    print("Finished fetching {:d} training samples and {:d} testing observations in {:.0f} seconds."
+          .format(len(X_train), len(data_test), time.clock()-t0))
 else:
-    y_base = data_train[:, 5]
-    zero_fill_count = zero_fill(y_base, missing_label)
-    if not is_quiet:
-        print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
-
-    X, y = shuffle(X, y, random_state=random_seed)
-    offset = np.floor(X.shape[0] * 0.8)
-    X_train, y_train, y_base_train = X[:offset], y[:offset], y_base[:offset]
-    X_test, y_test, y_base_test = X[offset:], y[offset:], y_base[offset:]
-    mae_base = abs(y_test - y_base_test).mean()
+    t0 = time.clock()
+    file_handle = open('data/training_data_4cv' + str(random_seed), 'r')
+    X_train, y_train, X_test, y_test, y_base_test, y_base0_test = pickle.load(file_handle)
+    file_handle.close()
+    print("Finished fetching {:d} training samples in {:.0f} seconds."
+          .format(len(y_train)+len(y_test), time.clock()-t0))
 
 #################################################################################
 # Fit regression model
-clf = ensemble.GradientBoostingRegressor(**gbr_param)
 
 t0 = time.clock()
+clf = ensemble.GradientBoostingRegressor(**gbr_param)
+print("Start training GBR model, please wait...")
 clf.fit(X_train, y_train)
-if not is_quiet:
-    print("Finished training Gradient Boosting Regressor with {:g} features in {:.1f} minutes.".
-          format(feature_count, (time.clock()-t0)/60.0))
+print("Finished training GBR model in {:.1f} minutes.".format((time.clock()-t0)/60.0))
 
 if is_test:
     y_test = clf.predict(X_test)
     zero_fill_count = predict_zero_negative(y_test)
-    if not is_quiet:
-        print("Replaced {:d} negative predictions with zeors out of {:d} test predictions."
-              .format(zero_fill_count, len(y_test)))
+    print("Replaced {:d} negative predictions with zeors out of {:d} GBR predictions."
+          .format(zero_fill_count, len(y_test)))
     zero_fill_count = test_zero_fill(X_test, y_test, missing_label, empty_prediction_value)
-    if not is_quiet:
-        print("Filled {:d} empty observations out of {:d} test observations.".format(zero_fill_count, len(y_test)))
-    output_file = open('test_prediction_gbr.csv', 'w')
+    print("Filled {:d} empty observations out of {:d} test observations.".format(zero_fill_count, len(y_test)))
+    output_file = open('data/test_prediction_gbr.csv', 'w')
     output_file.write("Id,Expected\n")
     for ii in range(len(data_test)):
         out_str = str(int(data_test[ii, 0]))+","+str(y_test[ii])
@@ -150,8 +128,8 @@ if is_test:
 else:
     y_predict_gbr = clf.predict(X_test)
     zero_fill_count = predict_zero_negative(y_predict_gbr)
-    if not is_quiet:
-        print("Replaced {:d} negative predictions with zeors out of {:d} predictions."
-              .format(zero_fill_count, len(y_predict_gbr)))
-    mae = abs(y_test - y_predict_gbr).mean()
-    print("GradientBoostingRegressor MAE = {:.4f} while base MAE = {:4f}".format(mae, mae_base))
+    print("Replaced {:d} negative predictions with zeors out of {:d} GBR predictions."
+          .format(zero_fill_count, len(y_predict_gbr)))
+    print_prediction(y_base_test)
+    print("Now printing results with shuffled baseline(just in case):")
+    print_prediction(y_base0_test)
