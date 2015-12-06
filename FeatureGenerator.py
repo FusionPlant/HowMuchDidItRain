@@ -74,11 +74,19 @@ def predict_with_reflectivity(reflectivity, time_interval_min):
         return missing_label
 
     precipitation_mm = 0.0
-    for dbz, minute in zip(reflectivity, time_interval_min):
-        if dbz is not None:
-            mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)
-        precipitation_mm += mm_per_hr * minute / 60.0
-    return precipitation_mm
+    if is_time_average:
+        for dbz, minute in zip(reflectivity, time_interval_min):
+            if dbz is not None:
+                mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)
+            precipitation_mm += mm_per_hr * minute
+        return precipitation_mm / 60.0
+    else:
+        value_count = 0
+        for dbz in reflectivity:
+            if dbz is not None:
+                precipitation_mm += pow(pow(10.0, dbz/10.0)/200, 0.625)
+                value_count += 1
+        return precipitation_mm / value_count
 
 
 # average data from value array
@@ -277,6 +285,7 @@ random_seeds = [1, 13]
 ####################################################################################################
 
 # To do: remove dist, add all averages
+# To do: change max_precipitation
 # fill empty field but not for completely empty observations
 
 if is_test:
@@ -306,7 +315,7 @@ else:
 t0 = time.clock()
 data_list = list()
 dropped_line = file_reader(in_data_file, data_list)
-print("Feature generation completed in {:.0f} minutes. {:d} observations dropped."
+print("Feature generation completed in {:.1f} minutes. {:d} observations dropped."
       .format((time.clock()-t0)/60.0, dropped_line))
 in_data_file.close()
 
@@ -329,7 +338,7 @@ if is_test:
     file_handle = open('data/testing_data', 'w')
     pickle.dump([data_test], file_handle)
     file_handle.close()
-    print("Testing data files generated in {.0f} seconds.".format(time.clock()-t0))
+    print("Testing data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
 else:
     t0 = time.clock()
     data_train = np.array(data_list)
@@ -343,13 +352,13 @@ else:
         X, y, y_base = shuffle(X0, y0, y_base0, random_state=random_seed)
         offset = np.floor(X.shape[0] * 0.8)
         X_train, y_train = X[:offset], y[:offset]
-        X_test, y_test, y_base_test, y_base0_test = X[offset:], y[offset:], y_base[offset:], y_base0[offset:]
+        X_test, y_test, y_base_test = X[offset:], y[offset:], y_base[offset:]
 
         file_handle = open('data/training_data_4cv' + str(random_seed), 'w')
-        pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base0_test], file_handle)
+        pickle.dump([X_train, y_train, X_test, y_test, y_base_test], file_handle)
         file_handle.close()
         file_handle = open('data/training_data_4test' + str(random_seed), 'w')
         pickle.dump([X, y], file_handle)
         file_handle.close()
 
-    print("Training data files generated in {:.0f} seconds.".format(time.clock()-t0))
+    print("Training data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
