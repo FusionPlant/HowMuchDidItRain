@@ -59,11 +59,11 @@ is_test = False
 empty_prediction_value = 0.762
 random_seed = 13
 missing_label = -999.0
-gbr_param = {'n_estimators': 1000, 'max_depth': 6, 'min_samples_split': 100,
-             'min_samples_leaf': 100, 'min_weight_fraction_leaf': 0, 'subsample': 1,
-             'learning_rate': 0.1, 'loss': 'lad', 'max_features': 10}
+ext_param = {'n_estimators': 1000, 'max_depth': 6, 'min_samples_split': 100,
+             'min_samples_leaf': 100, 'min_weight_fraction_leaf': 0,
+             'max_leaf_nodes': None, 'max_features': 10}
 zero_fill_range = range(4, 32)  # id already removed, so from 4th column, 28 columns in total
-data_folder = 'test_data'
+data_folder = 'data'
 
 # preprocessing data
 y_test = np.array([])
@@ -93,40 +93,40 @@ else:
 # Fit regression model
 
 t0 = time.clock()
-clf = ensemble.GradientBoostingRegressor(**gbr_param)
-print("Start training GBR model, please wait...")
+clf = ensemble.ExtraTreesRegressor(**ext_param)
+print("Start training EXT model, please wait...")
 clf.fit(X_train, y_train)
-print("Finished training GBR model with {:d} features in {:.1f} minutes."
+print("Finished training EXT model with {:d} features in {:.1f} minutes."
       .format(len(X_train[0]), (time.clock()-t0)/60.0))
 
 if is_test:
     y_test = clf.predict(X_test)
     zero_fill_count = predict_zero_negative(y_test)
-    print("Replaced {:d} negative predictions with zeors out of {:d} GBR predictions."
+    print("Replaced {:d} negative predictions with zeors out of {:d} EXT predictions."
           .format(zero_fill_count, len(y_test)))
     zero_fill_count = test_zero_fill(X_test, y_test, missing_label, empty_prediction_value)
     print("Filled {:d} empty observations out of {:d} test observations.".format(zero_fill_count, len(y_test)))
-    output_file = open(data_folder+'/test_prediction_gbr.csv', 'w')
+    output_file = open(data_folder+'/test_prediction_ext.csv', 'w')
     output_file.write("Id,Expected\n")
     for ii in range(len(data_test)):
         out_str = str(int(data_test[ii, 0]))+","+str(y_test[ii])
         output_file.write(out_str+'\n')
     output_file.close()
 else:
-    y_predict_gbr = clf.predict(X_test)
-    y_train_predict_gbr = clf.predict(X_train)
-    zero_fill_count = predict_zero_negative(y_predict_gbr)
-    predict_zero_negative(y_train_predict_gbr)
-    print("Replaced {:d} negative predictions with zeors out of {:d} GBR predictions."
-          .format(zero_fill_count, len(y_predict_gbr)))
+    y_predict_ext = clf.predict(X_test)
+    y_train_predict_ext = clf.predict(X_train)
+    zero_fill_count = predict_zero_negative(y_predict_ext)
+    predict_zero_negative(y_train_predict_ext)
+    print("Replaced {:d} negative predictions with zeors out of {:d} EXT predictions."
+          .format(zero_fill_count, len(y_predict_ext)))
     print("\n******************* Feature Importance ****************************\n")
     print(clf.feature_importances_)
     print("\n*******************************************************************\n")
-    mae_train = abs(y_train - y_train_predict_gbr).mean()
-    mae = abs(y_test - y_predict_gbr).mean()
+    mae_train = abs(y_train - y_train_predict_ext).mean()
+    mae = abs(y_test - y_predict_ext).mean()
     mae_base = abs(y_test - y_base_test).mean()
     mae_base_simple = abs(y_test - y_base_simple_test).mean()
-    msg = "GBR training MAE = {:.4f}, GBR testing MAE = {:.4f}, " +\
+    msg = "EXT training MAE = {:.4f}, EXT testing MAE = {:.4f}, " +\
           "baseline testing MAE = {:.4f}, simple averaged baseline testing MAE = {:.4f}."
     print(msg.format(mae_train, mae, mae_base, mae_base_simple))
 
@@ -134,13 +134,13 @@ else:
     mae_simple_mix = list()
     for ii in range(9):
         ratio = ii*0.1+0.1
-        mae_mix.append(abs(ratio*y_base_test + (1.0-ratio)*y_predict_gbr - y_test).mean())
-        mae_simple_mix.append(abs(ratio*y_base_simple_test + (1.0-ratio)*y_predict_gbr - y_test).mean())
-    print("GBR and baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
+        mae_mix.append(abs(ratio*y_base_test + (1.0-ratio)*y_predict_ext - y_test).mean())
+        mae_simple_mix.append(abs(ratio*y_base_simple_test + (1.0-ratio)*y_predict_ext - y_test).mean())
+    print("EXT and baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
           .format(*mae_mix))
-    print("GBR and simple averaged baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
+    print("EXT and simple averaged baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
           .format(*mae_simple_mix))
-    print("{:d} out of {:d} GBR predictions is greater than baseline prediction."
-          .format(np.sum(np.greater(y_predict_gbr, y_base_test)), len(y_predict_gbr)))
-    print("{:d} out of {:d} GBR predictions is greater than simple averaged baseline prediction."
-          .format(np.sum(np.greater(y_predict_gbr, y_base_simple_test)), len(y_predict_gbr)))
+    print("{:d} out of {:d} EXT predictions is greater than baseline prediction."
+          .format(np.sum(np.greater(y_predict_ext, y_base_test)), len(y_predict_ext)))
+    print("{:d} out of {:d} EXT predictions is greater than simple averaged baseline prediction."
+          .format(np.sum(np.greater(y_predict_ext, y_base_simple_test)), len(y_predict_ext)))

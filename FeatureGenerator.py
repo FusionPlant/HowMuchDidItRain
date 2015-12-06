@@ -300,8 +300,8 @@ output_folder = 'data'
 # 4 distance
 # 5-20 reflectivity->precipitation, 5 is time-averaged baseline, 6 is simple averaged baseline
 # 21-60 all radar data including reflectivity, time averaged followed by simple averaged
-# 60-91 precipitation type likelihoods
-# 92(does not exist in test file) expected precipitation
+# 61-92 precipitation type likelihoods
+# 93(does not exist in test file) expected precipitation
 
 # To do: remove dist
 # To do: change max_precipitation
@@ -366,6 +366,9 @@ else:
         zero_fill(y_base_simple0, missing_label)
         print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
 
+        file_handle = open(output_folder+'/training_data_4test', 'w')
+        pickle.dump([X0, y0], file_handle)
+        file_handle.close()
         for random_seed in random_seeds:
             X, y, y_base, y_base_simple = shuffle(X0, y0, y_base0, y_base_simple0, random_state=random_seed)
             offset = np.floor(X.shape[0] * 0.8)
@@ -375,9 +378,6 @@ else:
 
             file_handle = open(output_folder+'/training_data_4cv' + str(random_seed), 'w')
             pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
-            file_handle.close()
-            file_handle = open(output_folder+'/training_data_4test' + str(random_seed), 'w')
-            pickle.dump([X, y], file_handle)
             file_handle.close()
 
         print("Training data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
