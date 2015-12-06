@@ -287,6 +287,7 @@ is_add_precipitation_type = True
 is_simple_precipitation_type = False
 is_remove_last_type = False  # Make sure columns are linearly independent
 is_test = False  # Generating test features or training features
+is_csv = False
 random_seeds = [1, 13]
 output_folder = 'data'
 
@@ -307,10 +308,12 @@ output_folder = 'data'
 # fill empty field but not for completely empty observations
 
 if is_test:
-    in_data_file = open('data/test.csv')
+    in_data_file = open('data/test.csv', 'r')
+    out_data_file = open('data/testing_features.csv', 'w')
     drop_empty_block = False
 else:
-    in_data_file = open('data/train.csv')
+    in_data_file = open('data/train.csv', 'r')
+    out_data_file = open('data/training_features.csv', 'w')
 in_data_file.readline()
 
 if is_add_precipitation_type:
@@ -337,36 +340,44 @@ print("Feature generation completed in {:.1f} minutes. {:d} observations dropped
       .format((time.clock()-t0)/60.0, dropped_line))
 in_data_file.close()
 
-if is_test:
+if is_csv:
     t0 = time.clock()
-    data_test = np.array(data_list)
-    file_handle = open(output_folder+'/testing_data', 'w')
-    pickle.dump([data_test], file_handle)
-    file_handle.close()
-    print("Testing data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
+    for sample in enumerate(data_list):
+        out_str = ",".join([str(item) for item in sample])
+        out_data_file.write(out_str+'\n')
+    out_data_file.close()
+    print("CSV file generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
 else:
-    t0 = time.clock()
-    data_train = np.array(data_list)
-    X0 = data_train[:, 1:-1]
-    y0 = data_train[:, -1]
-    y_base0 = data_train[:, 5]
-    y_base_simple0 = data_train[:, 6]
-    zero_fill_count = zero_fill(y_base0, missing_label)
-    zero_fill(y_base_simple0, missing_label)
-    print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
-
-    for random_seed in random_seeds:
-        X, y, y_base, y_base_simple = shuffle(X0, y0, y_base0, y_base_simple0, random_state=random_seed)
-        offset = np.floor(X.shape[0] * 0.8)
-        X_train, y_train = X[:offset], y[:offset]
-        X_test, y_test, y_base_test, y_base_simple_test = \
-            X[offset:], y[offset:], y_base[offset:], y_base_simple[offset:]
-
-        file_handle = open(output_folder+'/training_data_4cv' + str(random_seed), 'w')
-        pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
+    if is_test:
+        t0 = time.clock()
+        data_test = np.array(data_list)
+        file_handle = open(output_folder+'/testing_data', 'w')
+        pickle.dump([data_test], file_handle)
         file_handle.close()
-        file_handle = open(output_folder+'/training_data_4test' + str(random_seed), 'w')
-        pickle.dump([X, y], file_handle)
-        file_handle.close()
+        print("Testing data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
+    else:
+        t0 = time.clock()
+        data_train = np.array(data_list)
+        X0 = data_train[:, 1:-1]
+        y0 = data_train[:, -1]
+        y_base0 = data_train[:, 5]
+        y_base_simple0 = data_train[:, 6]
+        zero_fill_count = zero_fill(y_base0, missing_label)
+        zero_fill(y_base_simple0, missing_label)
+        print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
 
-    print("Training data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
+        for random_seed in random_seeds:
+            X, y, y_base, y_base_simple = shuffle(X0, y0, y_base0, y_base_simple0, random_state=random_seed)
+            offset = np.floor(X.shape[0] * 0.8)
+            X_train, y_train = X[:offset], y[:offset]
+            X_test, y_test, y_base_test, y_base_simple_test = \
+                X[offset:], y[offset:], y_base[offset:], y_base_simple[offset:]
+
+            file_handle = open(output_folder+'/training_data_4cv' + str(random_seed), 'w')
+            pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
+            file_handle.close()
+            file_handle = open(output_folder+'/training_data_4test' + str(random_seed), 'w')
+            pickle.dump([X, y], file_handle)
+            file_handle.close()
+
+        print("Training data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
