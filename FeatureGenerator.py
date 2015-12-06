@@ -51,67 +51,73 @@ def count_data(id_block):
     return data_count
 
 
-# convert time in minutes into time interval in minutes
-def time_to_time_interval(time_min):
-    line_count = len(time_min)
-    time_interval_min = [0]*line_count
-    for i in range(line_count-1):
-        time_interval_min[i] = (time_min[i]+time_min[i+1])/2.0
-    time_interval_min[-1] = 60.0
-    for i in range(line_count-1, 0, -1):
-        time_interval_min[i] -= time_interval_min[i-1]
-    return time_interval_min
-
-
 # use reflectivity array to predict precipitation in one hour in mm
 # See: https://en.wikipedia.org/wiki/DBZ_(meteorology)
-def predict_with_reflectivity(reflectivity, time_interval_min):
-    for dbz in reflectivity:
-        if dbz is not None:
-            mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)  # first not None value
-            break
-    else:
-        return missing_label
-
+def predict_with_reflectivity(reflectivity, time_min, is_time_average):
+    mm_per_hr = None
+    last_valid_minute = 0.0
     precipitation_mm = 0.0
     if is_time_average:
-        for dbz, minute in zip(reflectivity, time_interval_min):
+        for dbz, minute in zip(reflectivity, time_min):
             if dbz is not None:
-                mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)
-            precipitation_mm += mm_per_hr * minute
-        return precipitation_mm / 60.0
+                if mm_per_hr is None:  # first valid entry
+                    mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)
+                    precipitation_mm += mm_per_hr * minute
+                    last_valid_minute = minute
+                else:  # after first valid entry
+                    precipitation_mm += mm_per_hr * (minute-last_valid_minute)/2
+                    mm_per_hr = pow(pow(10.0, dbz/10.0)/200, 0.625)
+                    precipitation_mm += mm_per_hr * (minute-last_valid_minute)/2
+                    last_valid_minute = minute
+        if mm_per_hr is None:
+            return missing_label
+        else:
+            precipitation_mm += mm_per_hr * (60.0-last_valid_minute)
+            return precipitation_mm / 60.0
     else:
         value_count = 0
         for dbz in reflectivity:
             if dbz is not None:
                 precipitation_mm += pow(pow(10.0, dbz/10.0)/200, 0.625)
                 value_count += 1
-        return precipitation_mm / value_count
+        if value_count == 0:
+            return missing_label
+        else:
+            return precipitation_mm / value_count
 
 
 # average data from value array
-def average_values(value_all, time_interval_min):
-    for value in value_all:
-        if value is not None:
-            valid_value = value  # first not None value
-            break
-    else:
-        return missing_label
-
-    averaged_value = 0.0
+def average_values(value_all, time_min, is_time_average):
+    last_valid_value = None
+    last_valid_minute = 0.0
+    value_sum = 0.0
     if is_time_average:
-        for value, minute in zip(value_all, time_interval_min):
+        for value, minute in zip(value_all, time_min):
             if value is not None:
-                valid_value = value
-            averaged_value += valid_value * minute
-        return averaged_value / 60.0
+                if last_valid_value is None:  # first valid entry
+                    last_valid_value = value
+                    value_sum += last_valid_value * minute
+                    last_valid_minute = minute
+                else:  # after first valid entry
+                    value_sum += last_valid_value * (minute-last_valid_minute)/2
+                    last_valid_value = value
+                    value_sum += last_valid_value * (minute-last_valid_minute)/2
+                    last_valid_minute = minute
+        if last_valid_value is None:
+            return missing_label
+        else:
+            value_sum += last_valid_value * (60.0-last_valid_minute)
+            return value_sum / 60.0
     else:
         value_count = 0
         for value in value_all:
             if value is not None:
-                averaged_value += value
+                value_sum += value
                 value_count += 1
-        return averaged_value / value_count
+        if value_count == 0:
+            return missing_label
+        else:
+            return value_sum / value_count
 
 
 # determine if the values in list x is in the range specified in list y
@@ -179,21 +185,22 @@ def id_block_process(id_block):
     time_min = [0]*line_count
     for i in range(line_count):
         time_min[i] = int(id_block[i][time_min_col])  # time data should never be missing
-    time_interval_min = time_to_time_interval(time_min)
 
     # Add precipitation predictions as features
     for j in reflectivity_col:
         reflectivity = list()
         for i in range(line_count):
             reflectivity.append(id_block[i][j])
-        features.append(predict_with_reflectivity(reflectivity, time_interval_min))
+        features.append(predict_with_reflectivity(reflectivity, time_min, True))
+        features.append(predict_with_reflectivity(reflectivity, time_min, False))
 
     # Add averaged values as features
     for j in to_average_col:
         value = list()
         for i in range(line_count):
             value.append(id_block[i][j])
-        features.append(average_values(value, time_interval_min))
+        features.append(average_values(value, time_min, True))
+        features.append(average_values(value, time_min, False))
 
     # Remove empty lines
     if drop_empty_block:
@@ -276,15 +283,26 @@ to_count_data_col = range(3, 23)
 max_precipitation = 70.0
 missing_label = -999.0
 drop_empty_block = True
-is_time_average = False  # Use simple average or time average
 is_add_precipitation_type = True
 is_simple_precipitation_type = False
 is_remove_last_type = False  # Make sure columns are linearly independent
 is_test = False  # Generating test features or training features
 random_seeds = [1, 13]
-####################################################################################################
+output_folder = 'data'
 
-# To do: remove dist, add all averages
+###############################################################################
+# data_list Columns:
+# 0 id
+# 1 observation line count
+# 2 valid data count
+# 3 valid data percentage
+# 4 distance
+# 5-20 reflectivity->precipitation, 5 is time-averaged baseline, 6 is simple averaged baseline
+# 21-60 all radar data including reflectivity, time averaged followed by simple averaged
+# 60-91 precipitation type likelihoods
+# 92(does not exist in test file) expected precipitation
+
+# To do: remove dist
 # To do: change max_precipitation
 # fill empty field but not for completely empty observations
 
@@ -319,23 +337,10 @@ print("Feature generation completed in {:.1f} minutes. {:d} observations dropped
       .format((time.clock()-t0)/60.0, dropped_line))
 in_data_file.close()
 
-###############################################################################
-# data_list Columns:
-# 0 id
-# 1 observation line count
-# 2 valid data count
-# 3 valid data percentage
-# 4 distance
-# 5-12 reflectivity->precipitation, 5 is the baseline
-# 13-32 all radar data including reflectivity, time averaged
-# 33-60/64(depends on whether or not remove the last precipitation type)
-# precipitation type likelihoods
-# last column(61/65): expected
-
 if is_test:
     t0 = time.clock()
     data_test = np.array(data_list)
-    file_handle = open('data/testing_data', 'w')
+    file_handle = open(output_folder+'/testing_data', 'w')
     pickle.dump([data_test], file_handle)
     file_handle.close()
     print("Testing data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
@@ -345,19 +350,22 @@ else:
     X0 = data_train[:, 1:-1]
     y0 = data_train[:, -1]
     y_base0 = data_train[:, 5]
+    y_base_simple0 = data_train[:, 6]
     zero_fill_count = zero_fill(y_base0, missing_label)
+    zero_fill(y_base_simple0, missing_label)
     print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
 
     for random_seed in random_seeds:
-        X, y, y_base = shuffle(X0, y0, y_base0, random_state=random_seed)
+        X, y, y_base, y_base_simple = shuffle(X0, y0, y_base0, y_base_simple0, random_state=random_seed)
         offset = np.floor(X.shape[0] * 0.8)
         X_train, y_train = X[:offset], y[:offset]
-        X_test, y_test, y_base_test = X[offset:], y[offset:], y_base[offset:]
+        X_test, y_test, y_base_test, y_base_simple_test = \
+            X[offset:], y[offset:], y_base[offset:], y_base_simple[offset:]
 
-        file_handle = open('data/training_data_4cv' + str(random_seed), 'w')
-        pickle.dump([X_train, y_train, X_test, y_test, y_base_test], file_handle)
+        file_handle = open(output_folder+'/training_data_4cv' + str(random_seed), 'w')
+        pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
         file_handle.close()
-        file_handle = open('data/training_data_4test' + str(random_seed), 'w')
+        file_handle = open(output_folder+'/training_data_4test' + str(random_seed), 'w')
         pickle.dump([X, y], file_handle)
         file_handle.close()
 

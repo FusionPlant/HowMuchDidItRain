@@ -41,21 +41,6 @@ def predict_zero_negative(data):
     return fill_count
 
 
-# output prediction results
-def print_prediction(baseline_prediction):
-    mae = abs(y_test - y_predict_gbr).mean()
-    mae_base = abs(y_test - baseline_prediction).mean()
-    print("GBR MAE = {:.4f}, baseline MAE = {:.4f}.".format(mae, mae_base))
-
-    mae_mix = list()
-    for ii in range(9):
-        ratio = ii*0.1+0.1
-        mae_mix.append(abs(ratio*baseline_prediction + (1.0-ratio)*y_predict_gbr - y_test).mean())
-    print("Mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
-          .format(*mae_mix))
-    print("{:d} out of {:d} GBR predictions is greater than baseline prediction."
-          .format(np.sum(np.greater(y_predict_gbr, baseline_prediction)), len(y_predict_gbr)))
-
 ###############################################################################
 
 # Column Meaning:
@@ -83,14 +68,14 @@ zero_fill_range = range(4, 32)  # id already removed, so from 4th column, 28 col
 y_test = np.array([])
 data_test = np.array([])
 y_base_test = np.array([])
-y_base0_test = np.array([])
+y_base_simple_test = np.array([])
 if is_test:
     t0 = time.clock()
     file_handle = open('data/training_data_4test' + str(random_seed), 'r')
-    X_train, y_train = pickle.load(file_handle)
+    [X_train, y_train] = pickle.load(file_handle)
     file_handle.close()
     file_handle = open('data/testing_data', 'r')
-    data_test = pickle.load(file_handle)
+    [data_test] = pickle.load(file_handle)
     file_handle.close()
     X_test = data_test[:, 1:]
     print("Finished fetching {:d} training samples and {:d} testing observations in {:.0f} seconds."
@@ -98,7 +83,7 @@ if is_test:
 else:
     t0 = time.clock()
     file_handle = open('data/training_data_4cv' + str(random_seed), 'r')
-    X_train, y_train, X_test, y_test, y_base_test, y_base0_test = pickle.load(file_handle)
+    [X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test] = pickle.load(file_handle)
     file_handle.close()
     print("Finished fetching {:d} training samples in {:.0f} seconds."
           .format(len(y_train)+len(y_test), time.clock()-t0))
@@ -110,7 +95,8 @@ t0 = time.clock()
 clf = ensemble.GradientBoostingRegressor(**gbr_param)
 print("Start training GBR model, please wait...")
 clf.fit(X_train, y_train)
-print("Finished training GBR model in {:.1f} minutes.".format((time.clock()-t0)/60.0))
+print("Finished training GBR model with {:d} features in {:.1f} minutes."
+      .format(len(X_train[0]), (time.clock()-t0)/60.0))
 
 if is_test:
     y_test = clf.predict(X_test)
@@ -130,6 +116,23 @@ else:
     zero_fill_count = predict_zero_negative(y_predict_gbr)
     print("Replaced {:d} negative predictions with zeors out of {:d} GBR predictions."
           .format(zero_fill_count, len(y_predict_gbr)))
-    print_prediction(y_base_test)
-    print("Now printing results with shuffled baseline(just in case):")
-    print_prediction(y_base0_test)
+    mae = abs(y_test - y_predict_gbr).mean()
+    mae_base = abs(y_test - y_base_test).mean()
+    mae_base_simple = abs(y_test - y_base_simple_test).mean()
+    print("GBR MAE = {:.4f}, baseline MAE = {:.4f}, simple averaged baseline MAE = {:.4f}."
+          .format(mae, mae_base, mae_base_simple))
+
+    mae_mix = list()
+    mae_simple_mix = list()
+    for ii in range(9):
+        ratio = ii*0.1+0.1
+        mae_mix.append(abs(ratio*y_base_test + (1.0-ratio)*y_predict_gbr - y_test).mean())
+        mae_simple_mix.append(abs(ratio*y_base_simple_test + (1.0-ratio)*y_predict_gbr - y_test).mean())
+    print("GBR and baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
+          .format(*mae_mix))
+    print("GBR and simple averaged baseline mixed MAE = {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.4f}."
+          .format(*mae_simple_mix))
+    print("{:d} out of {:d} GBR predictions is greater than baseline prediction."
+          .format(np.sum(np.greater(y_predict_gbr, y_base_test)), len(y_predict_gbr)))
+    print("{:d} out of {:d} GBR predictions is greater than simple averaged baseline prediction."
+          .format(np.sum(np.greater(y_predict_gbr, y_base_simple_test)), len(y_predict_gbr)))
