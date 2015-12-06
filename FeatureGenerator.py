@@ -309,11 +309,11 @@ output_folder = 'data'
 
 if is_test:
     in_data_file = open('data/test.csv', 'r')
-    out_data_file = open('data/testing_features.csv', 'w')
+    out_data_file = open(output_folder+'/testing_features.csv', 'w')
     drop_empty_block = False
 else:
     in_data_file = open('data/train.csv', 'r')
-    out_data_file = open('data/training_features.csv', 'w')
+    out_data_file = open(output_folder+'/training_features.csv', 'w')
 in_data_file.readline()
 
 if is_add_precipitation_type:
@@ -342,7 +342,7 @@ in_data_file.close()
 
 if is_csv:
     t0 = time.clock()
-    for sample in enumerate(data_list):
+    for sample in data_list:
         out_str = ",".join([str(item) for item in sample])
         out_data_file.write(out_str+'\n')
     out_data_file.close()
