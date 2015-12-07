@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from sklearn import ensemble
-import pickle
+import cPickle as cP
 # import sys
 # from sklearn import datasets
 # from sklearn.metrics import mean_squared_error
@@ -55,15 +55,15 @@ def predict_zero_negative(data):
 # 93(does not exist in test file) expected precipitation
 
 # define all parameters
-is_test = False
+is_test = True
 empty_prediction_value = 0.762
 random_seed = 13
 missing_label = -999.0
-gbr_param = {'n_estimators': 1000, 'max_depth': 6, 'min_samples_split': 100,
-             'min_samples_leaf': 100, 'min_weight_fraction_leaf': 0, 'subsample': 1,
-             'learning_rate': 0.1, 'loss': 'lad', 'max_features': 10}
+gbr_param = {'n_estimators': 2000, 'max_depth': 12, 'min_samples_split': 100,
+             'min_samples_leaf': 200, 'min_weight_fraction_leaf': 0, 'subsample': 0.7,
+             'learning_rate': 0.4, 'loss': 'lad', 'max_features': 15}
 zero_fill_range = range(4, 32)  # id already removed, so from 4th column, 28 columns in total
-data_folder = 'test_data'
+data_folder = 'data'
 
 # preprocessing data
 y_test = np.array([])
@@ -73,10 +73,10 @@ y_base_simple_test = np.array([])
 if is_test:
     t0 = time.clock()
     file_handle = open(data_folder+'/training_data_4test', 'r')
-    [X_train, y_train] = pickle.load(file_handle)
+    [X_train, y_train] = cP.load(file_handle)
     file_handle.close()
     file_handle = open(data_folder+'/testing_data', 'r')
-    [data_test] = pickle.load(file_handle)
+    [data_test] = cP.load(file_handle)
     file_handle.close()
     X_test = data_test[:, 1:]
     print("Finished fetching {:d} training samples and {:d} testing observations in {:.0f} seconds."
@@ -84,7 +84,7 @@ if is_test:
 else:
     t0 = time.clock()
     file_handle = open(data_folder+'/training_data_4cv' + str(random_seed), 'r')
-    [X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test] = pickle.load(file_handle)
+    [X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test] = cP.load(file_handle)
     file_handle.close()
     print("Finished fetching {:d} training samples in {:.0f} seconds."
           .format(len(y_train)+len(y_test), time.clock()-t0))

@@ -1,7 +1,7 @@
 import math
 import time
 import numpy as np
-import pickle
+import cPickle as cP
 from sklearn.utils import shuffle
 
 
@@ -26,8 +26,6 @@ def by_id_reader(input_file):
             print "Reading input line {:d}".format(line_num)
 
         line_data = csv_line_reader(line)
-        if line_data[0] is None:  # should never happen #debug#
-            print "Error: Missing id in line {:d}".format(line_num)
         if line_data[0] != data_id:
             data_id = line_data[0]
             if id_block is not None:
@@ -150,6 +148,47 @@ def precipitation_types_likelihood_cal(ref, rho_hv, zdr, kdp):
     return likelihoods
 
 
+# # use radar data to predict precipitation type
+# # Ref in dBz, Zdr in dB, Kdp in deg/km
+# def precipitation_rates(ref, zdr, kdp):
+#     rates = list()
+#     if ref == missing_label or ref <= 0:
+#         rates.extend([missing_label]*7)
+#     else:
+#         rates.append(0.027366*ref**0.69444)  # link eq1
+#         rates.append(0.0365*ref**0.625)  # paper 2 eq9a
+#         rates.append(0.0365*10**(0.0625*ref))  # paper 1 eq6
+#         rates.append(0.024*10**(0.0678*ref))  # paper 1 eq12 Dm=6mm
+#         if zdr == missing_label or zdr <= 0:
+#             rates.extend([missing_label]*3)
+#         else:
+#             rates.append(0.00684*ref*zdr**-4.86)  # link eq6
+#             rates.append(6.84*10**(0.1*(ref-30.0-4.86*zdr)))  # paper 1 eq8
+#             rates.append(5.755*10**(0.1*(ref-30.0-3.494*zdr)))  # paper 1 eq14 Dm=6mm
+#     if kdp == missing_label or kdp <= 0:
+#         rates.extend([missing_label]*5)
+#     else:
+#         rates.append(40.56*kdp**0.866)  # paper 1 eq9, paper 2 eq9c, link eq3
+#         if zdr == missing_label or zdr <= 0:
+#             rates.extend([missing_label]*4)
+#         else:
+#             rates.append(57.4*kdp**0.935*zdr**-0.704)  # paper 2 eq5
+#             rates.append(52.0*kdp**0.960*zdr**-0.447)  # paper 2 eq7
+#             rates.append(0.00764*kdp**0.945*zdr**-4.76)  # link eq2
+#             rates.append(136.0*kdp**0.968*zdr**-2.86)  # link eq4
+#     for i in range(len(rates)):
+#         if math.isnan(rates[i]) or math.isinf(rates[i]):
+#             print("error!")
+#             rates[i] = missing_label
+#         elif rates[i] == missing_label:
+#             pass
+#         elif rates[i] > max_precipitation:
+#             rates[i] = max_precipitation
+#         elif rates[i] < 0.0:
+#             rates[i] = 0.0
+#     return rates
+
+
 # for each data block from a same id, process it and return one line of data in list form
 def id_block_process(id_block):
     # Throw away >70mm data
@@ -205,15 +244,13 @@ def id_block_process(id_block):
             return None
 
     # Add precipitation type
-    for j in range(len(ref_col)):
-        type_likelihood = precipitation_types_likelihood_cal(features[ref_col[j]], features[rho_hv_col[j]],
-                                                             features[zdr_col[j]], features[kdp_col[j]])
+    for i in range(len(ref_col)):
+        type_likelihood = precipitation_types_likelihood_cal(features[ref_col[i]], features[rho_hv_col[i]],
+                                                             features[zdr_col[i]], features[kdp_col[i]])
         if is_remove_last_type:
             features.extend(type_likelihood[:-1])
         else:
             features.extend(type_likelihood)
-
-    # Add extra relation for raining rate prediction in mm_per_hr
 
     # Add expected values in the last column
     if len(id_block[0]) == 24:  # with expected column
@@ -345,7 +382,7 @@ else:
         t0 = time.clock()
         data_test = np.array(data_list)
         file_handle = open(output_folder+'/testing_data', 'w')
-        pickle.dump([data_test], file_handle)
+        cP.dump([data_test], file_handle)
         file_handle.close()
         print("Testing data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
     else:
@@ -360,7 +397,7 @@ else:
         print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
 
         file_handle = open(output_folder+'/training_data_4test', 'w')
-        pickle.dump([X0, y0], file_handle)
+        cP.dump([X0, y0], file_handle)
         file_handle.close()
         for random_seed in random_seeds:
             X, y, y_base, y_base_simple = shuffle(X0, y0, y_base0, y_base_simple0, random_state=random_seed)
@@ -370,7 +407,7 @@ else:
                 X[offset:], y[offset:], y_base[offset:], y_base_simple[offset:]
 
             file_handle = open(output_folder+'/training_data_4cv' + str(random_seed), 'w')
-            pickle.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
+            cP.dump([X_train, y_train, X_test, y_test, y_base_test, y_base_simple_test], file_handle)
             file_handle.close()
 
         print("Training data files generated in {:.1f} minutes.".format((time.clock()-t0)/60.0))
