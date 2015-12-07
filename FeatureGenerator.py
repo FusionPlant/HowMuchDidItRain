@@ -121,11 +121,10 @@ def average_values(value_all, time_min, is_time_average):
 
 
 # determine if the values in list x is in the range specified in list y
-# to be updated
 def type_likelihood_cal(radar_data, type_range, type_gaussian):
     likelihood = 1.0
     for i in range(len(radar_data)):
-        if radar_data[i] is None:
+        if radar_data[i] == missing_label:
             pass
         elif radar_data[i] < type_range[i][0] or radar_data[i] > type_range[i][1]:
             return 0
@@ -149,11 +148,6 @@ def precipitation_types_likelihood_cal(ref, rho_hv, zdr, kdp):
     for i in range(type_count):
         likelihoods[i] /= sum_likelihood
     return likelihoods
-
-
-def list_addition(x_list, y_list):
-    for i in range(len(x_list)):
-        x_list[i] += y_list[i]
 
 
 # for each data block from a same id, process it and return one line of data in list form
@@ -211,18 +205,15 @@ def id_block_process(id_block):
             return None
 
     # Add precipitation type
-    # to be updated
     for j in range(len(ref_col)):
-        type_likelihood = [0]*type_count
-        for i in range(line_count):
-            list_addition(type_likelihood,
-                          precipitation_types_likelihood_cal(id_block[i][ref_col[j]], id_block[i][rho_hv_col[j]],
-                                                             id_block[i][zdr_col[j]], id_block[i][kdp_col[j]]))
-        type_likelihood = [type_likelihood[i]/line_count for i in range(type_count)]
+        type_likelihood = precipitation_types_likelihood_cal(features[ref_col[j]], features[rho_hv_col[j]],
+                                                             features[zdr_col[j]], features[kdp_col[j]])
         if is_remove_last_type:
             features.extend(type_likelihood[:-1])
         else:
             features.extend(type_likelihood)
+
+    # Add extra relation for raining rate prediction in mm_per_hr
 
     # Add expected values in the last column
     if len(id_block[0]) == 24:  # with expected column
@@ -303,30 +294,28 @@ output_folder = 'data'
 # 61-92 precipitation type likelihoods
 # 93(does not exist in test file) expected precipitation
 
-# To do: remove dist
+# To do: remove dist, add xiao gang's feature
 # To do: change max_precipitation
 # fill empty field but not for completely empty observations
 
 if is_test:
     in_data_file = open('data/test.csv', 'r')
-    out_data_file = open(output_folder+'/testing_features.csv', 'w')
     drop_empty_block = False
 else:
     in_data_file = open('data/train.csv', 'r')
-    out_data_file = open(output_folder+'/training_features.csv', 'w')
 in_data_file.readline()
 
 if is_add_precipitation_type:
     if is_simple_precipitation_type:
-        ref_col = [3]
-        rho_hv_col = [11]
-        zdr_col = [15]
-        kdp_col = [19]
+        ref_col = [25]
+        rho_hv_col = [41]
+        zdr_col = [49]
+        kdp_col = [57]
     else:
-        ref_col = [3, 5, 7, 9]
-        rho_hv_col = [11, 13]*2
-        zdr_col = [15, 17]*2
-        kdp_col = [19, 21]*2
+        ref_col = [21, 25, 29, 33]
+        rho_hv_col = [37, 41]*2
+        zdr_col = [45, 49]*2
+        kdp_col = [53, 57]*2
 else:
     ref_col = list()
     rho_hv_col = list()
@@ -342,6 +331,10 @@ in_data_file.close()
 
 if is_csv:
     t0 = time.clock()
+    if is_test:
+        out_data_file = open(output_folder+'/testing_features.csv', 'w')
+    else:
+        out_data_file = open(output_folder+'/training_features.csv', 'w')
     for sample in data_list:
         out_str = ",".join([str(item) for item in sample])
         out_data_file.write(out_str+'\n')
@@ -360,8 +353,8 @@ else:
         data_train = np.array(data_list)
         X0 = data_train[:, 1:-1]
         y0 = data_train[:, -1]
-        y_base0 = data_train[:, 5]
-        y_base_simple0 = data_train[:, 6]
+        y_base0 = data_train[:, 9]
+        y_base_simple0 = data_train[:, 17]
         zero_fill_count = zero_fill(y_base0, missing_label)
         zero_fill(y_base_simple0, missing_label)
         print("Finished zero filling {:d} missing numbers.".format(zero_fill_count))
